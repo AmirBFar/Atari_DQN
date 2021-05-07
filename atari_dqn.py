@@ -147,10 +147,7 @@ class ReplayBuffer():
     def sample_batch(self,batch_size,sampling_policy):
         if sampling_policy == "Uniform":
             batch = choices(self.replay_buffer,k=batch_size)
-        elif sampling_policy == "PER":
-            temp_buffer = list(self.replay_buffer)
-            weights = [x[-1] for x in list(temp_buffer)]
-            batch = choices(temp_buffer,weights=weights,k=batch_size)
+     
         return [np.array([x[i] for x in batch]) for i in range(5)]
 
 
