@@ -13,7 +13,7 @@ import sys
 
 class DQN_Agent():
     
-    def __init__(self,env,num_episodes,batch_size,sampling_policy,dir_name,rank):
+    def __init__(self,env,num_episodes,batch_size,sampling_policy,dir_name="dqn",rank=1):
         self.env = gym.make(env)
         self.RB = ReplayBuffer()
         self.episode_length_vec = []
