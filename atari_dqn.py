@@ -24,6 +24,7 @@ class DQN_Agent():
         self.batch_size = batch_size
         self.episode_cnt = 0
         self.sampling_policy = sampling_policy
+        self.max_num_steps_per_episode = 10000
 
         self.dir_name = dir_name
         self.rank = rank
@@ -39,8 +40,8 @@ class DQN_Agent():
     def network(self):
         
         in_obs = tf.keras.layers.Input(shape=[84,84,4])
-        in_is_weights = tf.keras.layers.Input(shape=(1,))
-        in_actual     = tf.keras.layers.Input(shape=(self.env.action_space.n,))
+        #in_is_weights = tf.keras.layers.Input(shape=(1,))
+        #in_actual     = tf.keras.layers.Input(shape=(self.env.action_space.n,))
         norm = tf.keras.layers.Lambda(lambda x: x / 255.0)(in_obs)
 
         conv1 = tf.keras.layers.Conv2D(filters=32, kernel_size=8, strides=4,activation="relu", data_format="channels_last", padding="same")(norm)
@@ -48,11 +49,11 @@ class DQN_Agent():
         conv3 = tf.keras.layers.Conv2D(filters=64, kernel_size=3, strides=1,activation="relu", data_format="channels_last", padding="same")(conv2)
         
         conv_flattened = keras.layers.Flatten()(conv3)
-        hidden = keras.layers.Dense(256, activation='relu')(conv_flattened)
-        output = keras.layers.Dense(self.env.action_space.n,activation="linear")(hidden)
+        hidden = keras.layers.Dense(512, activation='relu')(conv_flattened)
+        output = keras.layers.Dense(self.env.action_space.n,activation="linear")(hidden) ### Q-value prediction
         
         
-        model = keras.models.Model(inputs=[in_obs, in_is_weights,in_actual], outputs=output)
+        model = keras.models.Model(inputs=in_obs, outputs=output)
         optimizer = optimizer=keras.optimizers.RMSprop(lr=0.00025, rho=0.95, epsilon=0.01)
         model.compile(optimizer, loss='mse')
 
@@ -71,10 +72,12 @@ class DQN_Agent():
 
     def learner(self):
         time.sleep(1)
+        update_cnt = 0
         while self.episode_cnt < self.num_episodes:
+            update_cnt += 1
             batch = self.RB.sample_batch(self.batch_size,self.sampling_policy)
             loss = self.train(batch)
-            if self.episode_cnt%10 == 0:
+            if update_cnt%10000 == 0:
                 self.target_q_net.set_weights(self.q_net.get_weights())
             
             
@@ -97,7 +100,8 @@ class DQN_Agent():
         episode_length = 0
         episode_reward = 0
         cnt = 0
-        eps = .05
+        episode_step_cnt = 0
+        eps = 1
         while self.episode_cnt < self.num_episodes:
             cnt += 1
             action = self.policy(state,eps)
@@ -110,9 +114,9 @@ class DQN_Agent():
             episode_length += 1
             episode_reward += reward
 
-            if done:
+            if done or episode_step_cnt == self.max_num_steps_per_episode:
                 with open("%s/%d.txt"%(self.dir_name,self.rank), 'a+') as f1:
-                    f1.write("%.2f\n"%(episode_reward))
+                    f1.write("%.2f,%.2f\n"%(episode_reward,episode_length))
                 state = self.env.reset()
                 state = ImageProcess(state)
                 state = np.stack([state] * 4, axis = 2)
@@ -125,7 +129,9 @@ class DQN_Agent():
                 self.episode_cnt += 1
                 episode_length = 0
                 episode_reward = 0
-                #eps = eps - 1/self.num_episodes
+                episode_step_cnt = 0
+                if eps > .1:
+                    eps = eps - 1/self.num_episodes
             else:
                 state = next_state
 
